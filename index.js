@@ -42,7 +42,6 @@ function isValidTronAddress(address) {
         return false;
     }
 }
-
 app.get("/", (req, res) => {
     res.send(`
       <!DOCTYPE html>
@@ -169,25 +168,6 @@ app.get("/", (req, res) => {
             const address = document.getElementById('address').value;
             const network = document.querySelector('input[name="network"]:checked').value;
 
-            // Validate the address based on the selected network
-            let isValid = false;
-            if (network === "TRON") {
-                // Validate TRON address
-                isValid = isValidTronAddress(address);
-                if (!isValid) {
-                    alert("Please enter a valid TRON address.");
-                    return;
-                }
-            } else if (network === "Ethereum") {
-                // Validate Ethereum address
-                isValid = isValidEthereumAddress(address);
-                if (!isValid) {
-                    alert("Please enter a valid Ethereum address.");
-                    return;
-                }
-            }
-
-            // If address is valid, make the API call
             const response = await fetch('/api/usdt-balance', {
                 method: 'POST',
                 headers: {
@@ -200,32 +180,24 @@ app.get("/", (req, res) => {
             const resultDiv = document.getElementById('result');
             resultDiv.style.display = 'block';
 
-           if (response.ok) {
+            if (response.ok) {
                         resultDiv.innerHTML = \`<p><strong>Network:</strong> \${result.network}</p>
                                                 <p><strong>Address:</strong> \${result.address}</p>
                                                 <p><strong>Balance:</strong> \${result.balance}</p>\`;
                     } else {
                         resultDiv.innerHTML = \`<p style="color: red;"><strong>Error:</strong> \${result.error}</p>\`;
                     }
+
         });
-
-        function isValidEthereumAddress(address) {
-            return ethers.isAddress(address);
-        }
-
-        function isValidTronAddress(address) {
-            // Add validation logic for TRON address format
-            if (typeof address !== 'string') return false;
-            if (!address.startsWith('T')) return false;
-            if (address.length !== 34) return false;
-            return TronWeb.isAddress(address);  // Using TronWeb to validate the address
-        }
     </script>
 
 </body>
 </html>
+
     `);
 });
+
+
 
 app.post("/api/usdt-balance", async (req, res) => {
     const { address } = req.body;
