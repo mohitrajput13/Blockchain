@@ -42,7 +42,61 @@ function isValidTronAddress(address) {
         return false;
     }
 }
-app.get("/", (req, res) => res.send("Express on Vercel"));
+app.get("/", (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Check USDT Balance</title>
+        </head>
+        <body>
+            <h1>Check USDT Balance</h1>
+            <form id="balanceForm">
+                <label for="address">Wallet Address:</label>
+                <input type="text" id="address" name="address" placeholder="Enter wallet address" required>
+                <br><br>
+                <label for="network">Select Network:</label>
+                <input type="radio" id="tron" name="network" value="TRON"> TRON
+                <input type="radio" id="ethereum" name="network" value="Ethereum" checked> Ethereum
+                <br><br>
+                <button type="submit">Check Balance</button>
+            </form>
+            <br>
+            <div id="result"></div>
+            <script>
+                document.getElementById('balanceForm').addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    
+                    const address = document.getElementById('address').value;
+                    const network = document.querySelector('input[name="network"]:checked').value;
+
+                    const response = await fetch('/api/usdt-balance', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ address })
+                    });
+
+                    const result = await response.json();
+                    const resultDiv = document.getElementById('result');
+
+                    if (response.ok) {
+                        resultDiv.innerHTML = \`<p><strong>Network:</strong> \${result.network}</p>
+                                                <p><strong>Address:</strong> \${result.address}</p>
+                                                <p><strong>Balance:</strong> \${result.balance}</p>\`;
+                    } else {
+                        resultDiv.innerHTML = \`<p style="color: red;"><strong>Error:</strong> \${result.error}</p>\`;
+                    }
+                });
+            </script>
+        </body>
+        </html>
+    `);
+});
+
 
 
 app.post("/api/usdt-balance", async (req, res) => {
