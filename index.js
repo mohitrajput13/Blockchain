@@ -42,6 +42,8 @@ function isValidTronAddress(address) {
         return false;
     }
 }
+app.get("/", (req, res) => res.send("Express on Vercel"));
+
 
 app.post("/api/usdt-balance", async (req, res) => {
     const { address } = req.body;
