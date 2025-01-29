@@ -12,16 +12,17 @@ const port = 3000;
 
 app.use(express.json());
 
-const ETHEREUM_USDT_CONTRACT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // USDT ERC-20
-const TRON_USDT_CONTRACT_ADDRESS = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj"; // USDT TRC-20
+const ETHEREUM_USDT_CONTRACT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 
 const ethereumProvider = new ethers.JsonRpcProvider(
     "https://mainnet.infura.io/v3/93bd69fb4161446a9fe47ca3ded14e1e"
 );
-const ethereumAbi = ["function balanceOf(address owner) view returns (uint256)"];
+const ethereumAbi = [
+    "function balanceOf(address owner) view returns (uint256)",
+];
 
 const tronWeb = new TronWeb({
-    fullHost: "https://api.trongrid.io",
+    fullHost: 'https://api.trongrid.io',
     headers: { "TRON-PRO-API-KEY": "af6aafac-1046-43a0-b29b-fd7421215724" }
 });
 
@@ -30,9 +31,17 @@ function isValidEthereumAddress(address) {
 }
 
 function isValidTronAddress(address) {
-    return TronWeb.isAddress(address);
-}
+    if (typeof address !== 'string') return false;
+    if (!address.startsWith('T')) return false;
+    if (address.length !== 34) return false;
 
+    try {
+        return TronWeb.isAddress(address);
+    } catch (error) {
+        console.error("TronWeb validation error:", error);
+        return false;
+    }
+}
 app.get("/", (req, res) => {
     res.send(`
       <!DOCTYPE html>
@@ -172,27 +181,22 @@ app.get("/", (req, res) => {
             resultDiv.style.display = 'block';
 
             if (response.ok) {
-    resultDiv.innerHTML = \`
-        <p><strong>Network:</strong> \${result.network}</p>
-        <p><strong>Address:</strong>\ ${result.address}</p>
-        <p><strong>Balance:</strong></p>
-        <ul>
-           \ ${result.network === "TRON" ? `<li>TRX: ${result.balance.TRX}</li>` : ""}
-           \ ${result.network === "Ethereum" ? `<li>ETH: ${result.balance.ETH}</li>` : ""}
-            <li>USDT: ${result.balance.USDT}</li>
-        </ul>\`;
-} else {
-    resultDiv.innerHTML = \`
-        <p style="color: red;"><strong>Error:</strong> ${result.error}</p>
-    \`;
-}
+                        resultDiv.innerHTML = \`<p><strong>Network:</strong> \${result.network}</p>
+                                                <p><strong>Address:</strong> \${result.address}</p>
+                                                <p><strong>Balance:</strong> \${result.balance}</p>\`;
+                    } else {
+                        resultDiv.innerHTML = \`<p style="color: red;"><strong>Error:</strong> \${result.error}</p>\`;
+                    }
+
         });
     </script>
 
 </body>
 </html>
+
     `);
 });
+
 
 
 app.post("/api/usdt-balance", async (req, res) => {
@@ -207,25 +211,16 @@ app.post("/api/usdt-balance", async (req, res) => {
 
     try {
         if (isValidTronAddress(normalizedAddress)) {
-            console.log("Valid TRON address detected, fetching TRX and USDT balance...");
+            console.log("Valid TRON address detected, fetching balance...");
 
             try {
-                // Fetch TRX balance
-                const trxBalance = await tronWeb.trx.getBalance(normalizedAddress);
-                const formattedTrxBalance = (parseFloat(trxBalance.toString()) / 1e6).toFixed(6);
-
-                // Fetch USDT (TRC-20) balance
-                const contract = await tronWeb.contract().at(TRON_USDT_CONTRACT_ADDRESS);
-                const usdtBalance = await contract.balanceOf(normalizedAddress).call();
-                const formattedUsdtBalance = (parseFloat(usdtBalance.toString()) / 1e6).toFixed(6);
+                const balance = await tronWeb.trx.getBalance(normalizedAddress);
+                const formattedBalance = (parseFloat(balance.toString()) / 1e6).toFixed(6);
 
                 return res.json({
                     network: "TRON",
                     address: normalizedAddress,
-                    balance: {
-                        TRX: `${formattedTrxBalance} TRX`,
-                        USDT: `${formattedUsdtBalance} USDT`
-                    }
+                    balance: `${formattedBalance} TRX`,
                 });
             } catch (tronError) {
                 console.error("TRON balance fetch error:", tronError);
@@ -268,8 +263,7 @@ app.post("/api/usdt-balance", async (req, res) => {
                     details: error.message || "Unknown error",
                 });
             }
-        }
-        else {
+        } else {
             return res.status(400).json({
                 error: "Invalid wallet address format",
                 address: normalizedAddress,
