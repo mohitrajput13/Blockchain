@@ -12,8 +12,13 @@ const port = 3000;
 
 app.use(express.json());
 
-const ETHEREUM_USDT_CONTRACT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // USDT ERC-20
-const TRON_USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"; // USDT TRC-20
+const ETHEREUM_USDT_CONTRACT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const TRON_USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+
+const NETWORKS = {
+    TRON: 'TRON',
+    ETHEREUM: 'Ethereum'
+};
 
 const ethereumProvider = new ethers.JsonRpcProvider(
     "https://mainnet.infura.io/v3/93bd69fb4161446a9fe47ca3ded14e1e"
@@ -44,6 +49,13 @@ function isValidEthereumAddress(address) {
 
 function isValidTronAddress(address) {
     return TronWeb.isAddress(address);
+}
+
+function normalizeNetwork(network) {
+    const normalizedNetwork = network.toLowerCase();
+    if (normalizedNetwork.includes('tron')) return NETWORKS.TRON;
+    if (normalizedNetwork.includes('eth')) return NETWORKS.ETHEREUM;
+    return null;
 }
 
 app.get("/", (req, res) => {
@@ -226,16 +238,20 @@ app.post("/api/usdt-balance", async (req, res) => {
         return res.status(400).json({ error: "A valid wallet address is required." });
     }
 
-    if (!network || (network !== "TRON" && network !== "Ethereum")) {
+    if (!network) {
+        return res.status(400).json({ error: "Network selection is required." });
+    }
+
+    const normalizedNetwork = normalizeNetwork(network);
+    if (!normalizedNetwork) {
         return res.status(400).json({ error: "Invalid network selected." });
     }
 
     const normalizedAddress = address.trim();
-    console.log("Checking address:", normalizedAddress, "on network:", network);
+    console.log("Checking address:", normalizedAddress, "on network:", normalizedNetwork);
 
     try {
-        // Handle TRON network
-        if (network === "TRON") {
+        if (normalizedNetwork === NETWORKS.TRON) {
             if (!isValidTronAddress(normalizedAddress)) {
                 return res.status(400).json({ error: "Invalid TRON address format" });
             }
@@ -249,7 +265,7 @@ app.post("/api/usdt-balance", async (req, res) => {
                 const formattedUsdtBalance = (parseFloat(usdtBalance.toString()) / 1e6).toFixed(6);
 
                 return res.json({
-                    network: "TRON",
+                    network: NETWORKS.TRON,
                     address: normalizedAddress,
                     balance: {
                         TRX: `${formattedTrxBalance} TRX`,
@@ -264,8 +280,7 @@ app.post("/api/usdt-balance", async (req, res) => {
                 });
             }
         }
-        // Handle Ethereum network
-        else if (network === "Ethereum") {
+        else if (normalizedNetwork === NETWORKS.ETHEREUM) {
             if (!isValidEthereumAddress(normalizedAddress)) {
                 return res.status(400).json({ error: "Invalid Ethereum address format" });
             }
@@ -284,7 +299,7 @@ app.post("/api/usdt-balance", async (req, res) => {
                 const formattedUsdtBalance = ethers.formatUnits(usdtBalance, 6);
 
                 return res.json({
-                    network: "Ethereum",
+                    network: NETWORKS.ETHEREUM,
                     address: normalizedAddress,
                     balance: {
                         ETH: `${formattedEthBalance} ETH`,
