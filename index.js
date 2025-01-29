@@ -12,36 +12,40 @@ const port = 3000;
 
 app.use(express.json());
 
-const ETHEREUM_USDT_CONTRACT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const ETHEREUM_USDT_CONTRACT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // USDT ERC-20
+const TRON_USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"; // USDT TRC-20
 
 const ethereumProvider = new ethers.JsonRpcProvider(
     "https://mainnet.infura.io/v3/93bd69fb4161446a9fe47ca3ded14e1e"
 );
-const ethereumAbi = [
-    "function balanceOf(address owner) view returns (uint256)",
-];
+const ethereumAbi = ["function balanceOf(address owner) view returns (uint256)"];
 
 const tronWeb = new TronWeb({
     fullHost: 'https://api.trongrid.io',
-    headers: { "TRON-PRO-API-KEY": "af6aafac-1046-43a0-b29b-fd7421215724" }
+    headers: { "TRON-PRO-API-KEY": "af6aafac-1046-43a0-b29b-fd7421215724" },
+    privateKey: 'D526E0AB73B3552F0B0FB85838DB364D90C1CAC4BC76294373FABA83C04914DD'
 });
+
+const tronUsdtAbi = [
+    {
+        "constant": true,
+        "inputs": [{ "name": "owner", "type": "address" }],
+        "name": "balanceOf",
+        "outputs": [{ "name": "", "type": "uint256" }],
+        "payable": false,
+        "stateMutability": "view",
+        "type": "function"
+    }
+];
 
 function isValidEthereumAddress(address) {
     return ethers.isAddress(address);
 }
 
 function isValidTronAddress(address) {
-    if (typeof address !== 'string') return false;
-    if (!address.startsWith('T')) return false;
-    if (address.length !== 34) return false;
-
-    try {
-        return TronWeb.isAddress(address);
-    } catch (error) {
-        console.error("TronWeb validation error:", error);
-        return false;
-    }
+    return TronWeb.isAddress(address);
 }
+
 app.get("/", (req, res) => {
     res.send(`
       <!DOCTYPE html>
@@ -142,7 +146,6 @@ app.get("/", (req, res) => {
     </style>
 </head>
 <body>
-
     <div class="container">
         <h1>Check USDT Balance</h1>
         <form id="balanceForm">
@@ -167,60 +170,91 @@ app.get("/", (req, res) => {
             
             const address = document.getElementById('address').value;
             const network = document.querySelector('input[name="network"]:checked').value;
-
-            const response = await fetch('/api/usdt-balance', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ address })
-            });
-
-            const result = await response.json();
+            
             const resultDiv = document.getElementById('result');
             resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p>Loading...</p>';
 
-            if (response.ok) {
-                        resultDiv.innerHTML = \`<p><strong>Network:</strong> \${result.network}</p>
-                                                <p><strong>Address:</strong> \${result.address}</p>
-                                                <p><strong>Balance:</strong> \${result.balance}</p>\`;
-                    } else {
-                        resultDiv.innerHTML = \`<p style="color: red;"><strong>Error:</strong> \${result.error}</p>\`;
-                    }
+            try {
+                const response = await fetch('/api/usdt-balance', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        address,
+                        network 
+                    })
+                });
 
+                const result = await response.json();
+
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = \`
+                        <p><strong>Network:</strong> \${result.network}</p>
+                        <p><strong>Address:</strong> \${result.address}</p>
+                        <p><strong>Balance:</strong></p>
+                        <ul>
+                            \${result.network === "TRON" ? \`<li>TRX: \${result.balance.TRX}</li>\` : ""}
+                            \${result.network === "Ethereum" ? \`<li>ETH: \${result.balance.ETH}</li>\` : ""}
+                            <li>USDT: \${result.balance.USDT}</li>
+                        </ul>\`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = \`
+                        <p><strong>Error:</strong> \${result.error}</p>
+                    \`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = \`
+                    <p><strong>Error:</strong> Failed to fetch balance. Please try again.</p>
+                \`;
+            }
         });
     </script>
-
 </body>
 </html>
-
     `);
 });
 
-
-
 app.post("/api/usdt-balance", async (req, res) => {
-    const { address } = req.body;
+    const { address, network } = req.body;
 
     if (!address || typeof address !== "string") {
         return res.status(400).json({ error: "A valid wallet address is required." });
     }
 
+    if (!network || (network !== "TRON" && network !== "Ethereum")) {
+        return res.status(400).json({ error: "Invalid network selected." });
+    }
+
     const normalizedAddress = address.trim();
-    console.log("Checking address:", normalizedAddress);
+    console.log("Checking address:", normalizedAddress, "on network:", network);
 
     try {
-        if (isValidTronAddress(normalizedAddress)) {
-            console.log("Valid TRON address detected, fetching balance...");
+        // Handle TRON network
+        if (network === "TRON") {
+            if (!isValidTronAddress(normalizedAddress)) {
+                return res.status(400).json({ error: "Invalid TRON address format" });
+            }
 
             try {
-                const balance = await tronWeb.trx.getBalance(normalizedAddress);
-                const formattedBalance = (parseFloat(balance.toString()) / 1e6).toFixed(6);
+                const trxBalance = await tronWeb.trx.getBalance(normalizedAddress);
+                const formattedTrxBalance = (parseFloat(trxBalance.toString()) / 1e6).toFixed(6);
+
+                const contract = await tronWeb.contract(tronUsdtAbi, TRON_USDT_CONTRACT_ADDRESS);
+                const usdtBalance = await contract.balanceOf(normalizedAddress).call();
+                const formattedUsdtBalance = (parseFloat(usdtBalance.toString()) / 1e6).toFixed(6);
 
                 return res.json({
                     network: "TRON",
                     address: normalizedAddress,
-                    balance: `${formattedBalance} TRX`,
+                    balance: {
+                        TRX: `${formattedTrxBalance} TRX`,
+                        USDT: `${formattedUsdtBalance} USDT`
+                    }
                 });
             } catch (tronError) {
                 console.error("TRON balance fetch error:", tronError);
@@ -230,15 +264,16 @@ app.post("/api/usdt-balance", async (req, res) => {
                 });
             }
         }
-        else if (isValidEthereumAddress(normalizedAddress)) {
-            console.log("Valid Ethereum address detected, fetching ETH and USDT balance...");
+        // Handle Ethereum network
+        else if (network === "Ethereum") {
+            if (!isValidEthereumAddress(normalizedAddress)) {
+                return res.status(400).json({ error: "Invalid Ethereum address format" });
+            }
 
             try {
-                // Fetch ETH balance
                 const ethBalance = await ethereumProvider.getBalance(normalizedAddress);
                 const formattedEthBalance = ethers.formatUnits(ethBalance, 18);
 
-                // Fetch USDT (ERC-20) balance
                 const contract = new ethers.Contract(
                     ETHEREUM_USDT_CONTRACT_ADDRESS,
                     ethereumAbi,
@@ -263,11 +298,6 @@ app.post("/api/usdt-balance", async (req, res) => {
                     details: error.message || "Unknown error",
                 });
             }
-        } else {
-            return res.status(400).json({
-                error: "Invalid wallet address format",
-                address: normalizedAddress,
-            });
         }
     } catch (error) {
         console.error("Unexpected error:", error);
