@@ -1,6 +1,6 @@
 const express = require("express");
 const { ethers } = require("ethers");
-const TronWeb = require("tronweb");
+const { TronWeb } = require("tronweb");
 const { AbortController } = require("abort-controller");
 
 if (typeof global.AbortController === "undefined") {
